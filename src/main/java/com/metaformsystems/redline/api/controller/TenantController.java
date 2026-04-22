@@ -13,7 +13,7 @@
  */
 
 package com.metaformsystems.redline.api.controller;
-
+import com.metaformsystems.redline.api.dto.request.JoinDataspaceRequest;
 import com.metaformsystems.redline.api.dto.request.DataPlaneRegistrationRequest;
 import com.metaformsystems.redline.api.dto.request.DataspaceRequest;
 import com.metaformsystems.redline.api.dto.request.ParticipantDeployment;
@@ -73,6 +73,24 @@ public class TenantController {
     })
     public ResponseEntity<List<DataspaceResponse>> getDataspaces() {
         return ResponseEntity.ok(serviceProviderService.getDataspaces());
+    }
+
+    @PostMapping("service-providers/{serviceProviderId}/tenants/{tenantId}/participants/{participantId}/dataspaces/{dataspaceId}/join")
+    @Operation(summary = "Join an additional dataspace with the current participant",
+            description = "Adds a new Participant (with its own DID) to an existing participant for the specified dataspace.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully joined dataspace",
+                    content = @Content(schema = @Schema(implementation = Participant.class))),
+            @ApiResponse(responseCode = "404", description = "Tenant, participant or dataspace not found"),
+            @ApiResponse(responseCode = "409", description = "Participant already in this dataspace")
+    })
+    public ResponseEntity<Participant> joinDataspace(@PathVariable Long serviceProviderId,
+                                                     @PathVariable Long tenantId,
+                                                     @PathVariable Long participantId,
+                                                     @PathVariable Long dataspaceId,
+                                                     @RequestBody(required = false) JoinDataspaceRequest request) {
+        var roles = (request != null && request.roles() != null) ? request.roles() : java.util.List.<String>of();
+        return ResponseEntity.ok(tenantService.joinAdditionalDataspace(tenantId, participantId, dataspaceId, roles));
     }
 
     @GetMapping("service-providers")

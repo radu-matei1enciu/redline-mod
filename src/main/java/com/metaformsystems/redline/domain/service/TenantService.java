@@ -132,6 +132,38 @@ public class TenantService {
         return toTenantResource(savedTenant);
     }
 
+    /**
+     * Adds a new dataspace to an existing participant
+     */
+    @Transactional
+    public Participant joinAdditionalDataspace(Long tenantId, Long participantId,  Long dataspaceId, List<String> roles) {
+        tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ObjectNotFoundException("Tenant not found with id: " + tenantId));
+
+        var participant = participantRepository.findById(participantId)
+                .orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
+
+        dataspaceRepository.findById(dataspaceId)
+                .orElseThrow(() -> new ObjectNotFoundException("Dataspace not found with id: " + dataspaceId));
+
+        // Guard: don't allow duplicate membership.
+        boolean alreadyJoined = participant.getDataspaceInfos().stream().anyMatch(ds -> dataspaceId.equals(ds.getDataspaceId()));
+        if (alreadyJoined) {
+            throw new IllegalStateException(
+                    "Tenant " + tenantId + " already participates in dataspace " + dataspaceId);
+        }
+
+        var info = new DataspaceInfo();
+        info.setDataspaceId(dataspaceId);
+        info.setRoles(roles != null ? roles : java.util.List.of());
+        info.setAgreementTypes(java.util.List.of());
+        participant.addDataspaceInfo(info);
+
+        participantRepository.save(participant);
+
+        return toParticipantResource(participant);
+    }
+
     @Transactional
     public Participant deployParticipant(ParticipantDeployment deployment) {
         var participant = participantRepository.findById(deployment.participantId())
@@ -157,6 +189,23 @@ public class TenantService {
 
         // wait for participants to be ready
         var saved = participantRepository.save(participant);
+
+// Eagerly load credentials from Vault so downstream calls (file upload, catalog, etc.)
+// don't NPE when they try to read clientCredentials. This mirrors what getParticipant()
+// lazily does on read, but does it at deploy time so the first call after deploy works.
+        try {
+            var pcId = extractParticipantContextId(tmProfile);
+            if (pcId != null) {
+                saved.setParticipantContextId(pcId);
+                if (saved.getClientCredentials() == null) {
+                    getClientCredentials(pcId);  // populates saved.clientCredentials as a side effect
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to eagerly load credentials for participant {}: {}", saved.getId(), ex.getMessage());
+            // Non-fatal — getParticipant() will retry on next read.
+        }
+
         return toParticipantResource(saved);
     }
 

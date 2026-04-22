@@ -128,4 +128,8 @@ public class Participant extends VersionedEntity {
     public void setUploadedFiles(List<UploadedFile> uploadedFiles) {
         this.uploadedFiles = uploadedFiles;
     }
+
+    public void addDataspaceInfo(DataspaceInfo info) {
+        this.dataspaceInfos.add(info);
+    }
 }
