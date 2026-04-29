@@ -16,9 +16,6 @@ name: Build and Push Launcher Images
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
