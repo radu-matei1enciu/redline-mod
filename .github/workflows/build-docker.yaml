@@ -16,15 +16,16 @@ name: Build and Push Launcher Images
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: [ "Verify" ]
-    types:
-      - completed
-    branches: [ main ]
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build-and-push-docker:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
