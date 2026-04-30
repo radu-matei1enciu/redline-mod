@@ -24,6 +24,7 @@ public record ParticipantProfile(
         String tenantId,
         Boolean error,
         String errorDetail,
+        List<String> dataspaceProfileIds,
         Map<String, List<String>> participantRoles,
         Map<String, Object> properties,
         List<VirtualParticipantAgent> vpas

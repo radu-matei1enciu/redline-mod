@@ -177,9 +177,25 @@ public class TenantService {
         }
 
         // invoke CFM to deploy the ParticipantProfile and update the internal Participant entity with correlation id, identifier, and VPAs
-        var tmProfile = tenantManagerClient.deployParticipantProfile(tenant.getCorrelationId(), new ParticipantProfile(
-                UUID.randomUUID().toString(), 0L, deployment.identifier(), tenant.getCorrelationId(), false, null, Map.of(), Map.of(), Collections.emptyList()
-        ));
+
+        var cfmDataspaceProfileIds = resolveCfmDataspaceProfileIds(participant);
+
+        var tmProfile = tenantManagerClient.deployParticipantProfile(
+                tenant.getCorrelationId(),
+                new ParticipantProfile(
+                        UUID.randomUUID().toString(),
+                        0L,
+                        deployment.identifier(),
+                        tenant.getCorrelationId(),
+                        false,
+                        null,
+                        cfmDataspaceProfileIds,
+                        Map.of(),
+                        Map.of(),
+                        Collections.emptyList()
+                )
+        );
+
         participant.setCorrelationId(tmProfile.id());
         participant.setIdentifier(tmProfile.identifier());
 
@@ -342,6 +358,40 @@ public class TenantService {
                 .labels(request.allowedTransferTypes())
                 .url(request.url().formatted(participantContextId))
                 .build());
+    }
+
+    private List<String> resolveCfmDataspaceProfileIds(com.metaformsystems.redline.domain.entity.Participant participant) {
+        var dataspaceIds = participant.getDataspaceInfos().stream()
+                .map(DataspaceInfo::getDataspaceId)
+                .toList();
+
+        if (dataspaceIds.isEmpty()) {
+            throw new IllegalStateException("Participant " + participant.getId() + " has no selected dataspaces.");
+        }
+
+        var dataspaces = dataspaceRepository.findAllById(dataspaceIds);
+
+        var cfmProfileIds = dataspaces.stream()
+                .map(dataspace -> {
+                    var value = dataspace.getProperties().get("cfmDataspaceProfileId");
+
+                    if (!(value instanceof String cfmProfileId) || !StringUtils.hasText(cfmProfileId)) {
+                        throw new IllegalStateException(
+                                "Dataspace " + dataspace.getId() + " / " + dataspace.getName()
+                                        + " does not have property cfmDataspaceProfileId"
+                        );
+                    }
+
+                    return cfmProfileId;
+                })
+                .distinct()
+                .toList();
+
+        if (cfmProfileIds.isEmpty()) {
+            throw new IllegalStateException("No CFM dataspace profile IDs could be resolved for participant " + participant.getId());
+        }
+
+        return cfmProfileIds;
     }
 
     private @Nullable String extractParticipantContextId(ParticipantProfile participant) {
