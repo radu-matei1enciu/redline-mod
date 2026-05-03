@@ -179,6 +179,7 @@ public class TenantService {
         // invoke CFM to deploy the ParticipantProfile and update the internal Participant entity with correlation id, identifier, and VPAs
 
         var cfmDataspaceProfileIds = resolveCfmDataspaceProfileIds(participant);
+        var participantRoles = resolveParticipantRoles(cfmDataspaceProfileIds);
 
         var tmProfile = tenantManagerClient.deployParticipantProfile(
                 tenant.getCorrelationId(),
@@ -190,7 +191,7 @@ public class TenantService {
                         false,
                         null,
                         cfmDataspaceProfileIds,
-                        Map.of(),
+                        participantRoles,
                         Map.of(),
                         Collections.emptyList()
                 )
@@ -223,6 +224,15 @@ public class TenantService {
         }
 
         return toParticipantResource(saved);
+    }
+
+
+    private Map<String, List<String>> resolveParticipantRoles(List<String> cfmDataspaceProfileIds) {
+        return cfmDataspaceProfileIds.stream()
+                .collect(Collectors.toMap(
+                        profileId -> profileId,
+                        profileId -> List.of("manufacturer")
+                ));
     }
 
     @Transactional
