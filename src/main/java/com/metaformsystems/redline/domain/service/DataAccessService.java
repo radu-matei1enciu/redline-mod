@@ -56,10 +56,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.metaformsystems.redline.domain.service.Constants.ASSET_PERMISSION;
-import static com.metaformsystems.redline.domain.service.Constants.MEMBERSHIP_CONSTRAINT;
-import static com.metaformsystems.redline.domain.service.Constants.MEMBERSHIP_EXPRESSION;
-import static com.metaformsystems.redline.domain.service.Constants.MEMBERSHIP_EXPRESSION_ID;
+import static com.metaformsystems.redline.domain.service.Constants.*;
 
 @Service
 public class DataAccessService {
@@ -98,7 +95,7 @@ public class DataAccessService {
         var expressions = new ArrayList<>(celExpressions);
         expressions.add(CelExpression.Builder.aNewCelExpression()
                 .id(MEMBERSHIP_EXPRESSION_ID)
-                .leftOperand("MembershipCredential")
+                .leftOperand(MEMBERSHIP_LEFT_OPERAND)
                 .description("Expression for evaluating membership credential")
                 .scopes(Set.of("catalog", "contract.negotiation", "transfer.process"))
                 .expression(MEMBERSHIP_EXPRESSION)
