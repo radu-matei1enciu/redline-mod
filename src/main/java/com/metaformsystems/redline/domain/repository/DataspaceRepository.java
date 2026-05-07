@@ -16,8 +16,21 @@ package com.metaformsystems.redline.domain.repository;
 
 import com.metaformsystems.redline.domain.entity.Dataspace;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import java.util.List;
 
 @Repository
 public interface DataspaceRepository extends JpaRepository<Dataspace, Long> {
+    @Query("""
+            SELECT d FROM Dataspace d
+            WHERE d.id IN (
+                SELECT di.dataspaceId FROM DataspaceInfo di
+                JOIN di.partners p
+                WHERE p.identifier = :counterPartyIdentifier
+            )
+            """)
+    List<Dataspace> findDataspacesByCounterPartyIdentifier(@Param("counterPartyIdentifier") String counterPartyIdentifier);
 }

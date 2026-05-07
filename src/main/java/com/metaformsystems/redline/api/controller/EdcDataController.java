@@ -70,7 +70,7 @@ public class EdcDataController {
         this.objectMapper = objectMapper;
     }
 
-    @PostMapping(path = "service-providers/{providerId}/tenants/{tenantId}/participants/{participantId}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(path = "service-providers/{providerId}/dataspaces/{dataspaceId}/tenants/{tenantId}/participants/{participantId}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 //    @PreAuthorize("hasRole('USER')")
     @Operation(summary = "Upload a file", description = "Uploads a file for a specific participant with associated metadata")
     @ApiResponses(value = {
@@ -80,11 +80,13 @@ public class EdcDataController {
             @ApiResponse(responseCode = "500", description = "Internal server error during file upload")
     })
     @Parameter(name = "participantId", description = "Database ID of the participant", required = true)
+    @Parameter(name = "dataspaceId", description = "Database ID of the data space", required = true)
     @Parameter(name = "tenantId", description = "Database ID of the tenant", required = true)
     @Parameter(name = "providerId", description = "Database ID of the service provider", required = true)
     public ResponseEntity<Void> uploadFile(@PathVariable Long participantId,
                                            @PathVariable Long tenantId,
                                            @PathVariable Long providerId,
+                                           @PathVariable Long dataspaceId,
                                            @RequestPart("publicMetadata") Map<String, Object> publicMetadata,
                                            @RequestPart("privateMetadata") Map<String, Object> privateMetadata,
                                            @RequestPart(value = "celExpressions", required = false) List<CelExpression> celExpressions,

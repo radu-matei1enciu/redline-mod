@@ -143,8 +143,7 @@ public class TenantService {
         var participant = participantRepository.findById(participantId)
                 .orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
 
-        dataspaceRepository.findById(dataspaceId)
-                .orElseThrow(() -> new ObjectNotFoundException("Dataspace not found with id: " + dataspaceId));
+        var dataspace = dataspaceRepository.findById(dataspaceId).orElseThrow(() -> new ObjectNotFoundException("Dataspace not found with id: " + dataspaceId));
 
         // Guard: don't allow duplicate membership.
         boolean alreadyJoined = participant.getDataspaceInfos().stream().anyMatch(ds -> dataspaceId.equals(ds.getDataspaceId()));
@@ -160,6 +159,14 @@ public class TenantService {
         participant.addDataspaceInfo(info);
 
         participantRepository.save(participant);
+
+        var cfmDataspaceProfileId = (String) dataspace.getProperties().get("cfmDataspaceProfileId");
+          if (cfmDataspaceProfileId == null || cfmDataspaceProfileId.isBlank()) {throw new IllegalStateException(
+                                    "Dataspace " + dataspaceId + " does not have property cfmDataspaceProfileId — cannot issue credentials");
+                }
+            var tenant = participant.getTenant();
+            tenantManagerClient.joinDataspace(tenant.getCorrelationId(), participant.getCorrelationId(), cfmDataspaceProfileId);
+
 
         return toParticipantResource(participant);
     }
