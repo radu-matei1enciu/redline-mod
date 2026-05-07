@@ -63,4 +63,6 @@ public interface TenantManagerClient {
     Tenant updateTenant(String id, TenantPropertiesDiff diff);
 
     List<Tenant> queryTenants(ModelQuery query);
+
+    void joinDataspace(String tenantId, String participantId, String dataspaceProfileId);
 }
