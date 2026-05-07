@@ -95,7 +95,7 @@ public class DataAccessService {
         var expressions = new ArrayList<>(celExpressions);
         expressions.add(CelExpression.Builder.aNewCelExpression()
                 .id(MEMBERSHIP_EXPRESSION_ID)
-                .leftOperand(MEMBERSHIP_LEFT_OPERAND)
+                .leftOperand("CatenaMembershipCredential")
                 .description("Expression for evaluating membership credential")
                 .scopes(Set.of("catalog", "contract.negotiation", "transfer.process"))
                 .expression(MEMBERSHIP_EXPRESSION)

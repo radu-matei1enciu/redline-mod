@@ -276,6 +276,7 @@ public class ManagementApiClientImpl implements ManagementApiClient {
 
     @Override
     public Catalog getCatalog(String participantContextId, CatalogRequest request) {
+        System.out.println(request);
         return controlPlaneWebClient.post()
                 .uri("/v5beta/participants/%s/catalog/request".formatted(participantContextId))
                 .header("Authorization", "Bearer " + getToken(participantContextId))

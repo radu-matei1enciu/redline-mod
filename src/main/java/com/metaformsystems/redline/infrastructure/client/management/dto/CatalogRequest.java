@@ -14,10 +14,10 @@
 
 package com.metaformsystems.redline.infrastructure.client.management.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 public class CatalogRequest {
     @JsonProperty("@context")
@@ -29,6 +29,9 @@ public class CatalogRequest {
     private String protocol = "dataspace-protocol-http:2025-1";
     private String counterPartyAddress;
     private String counterPartyId;
+    private List<String> additionalScopes = new ArrayList<>(List.of(
+            "org.eclipse.dspace.dcp.vc.type:CatenaMembershipCredential:read"
+    ));
 
     public String[] getContext() {
         return context;
@@ -48,6 +51,10 @@ public class CatalogRequest {
 
     public String getCounterPartyId() {
         return counterPartyId;
+    }
+
+    public List<String> getAdditionalScopes() {
+        return additionalScopes;
     }
 
     public static final class Builder {
@@ -76,8 +83,28 @@ public class CatalogRequest {
             return this;
         }
 
+        public Builder additionalScopes(List<String> additionalScopes) {
+            transferRequest.additionalScopes = new ArrayList<>(additionalScopes);
+            return this;
+        }
+
+        public Builder addScope(String scope) {
+            transferRequest.additionalScopes.add(scope);
+            return this;
+        }
+
         public CatalogRequest build() {
             return transferRequest;
         }
+    }
+
+    @Override
+    public String toString() {
+        return "CatalogRequest{" +
+                "protocol='" + protocol + '\'' +
+                ", counterPartyAddress='" + counterPartyAddress + '\'' +
+                ", counterPartyId='" + counterPartyId + '\'' +
+                ", additionalScopes=" + additionalScopes +
+                '}';
     }
 }
