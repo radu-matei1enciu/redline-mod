@@ -64,5 +64,5 @@ public interface TenantManagerClient {
 
     List<Tenant> queryTenants(ModelQuery query);
 
-    void joinDataspace(String tenantId, String participantId, String dataspaceProfileId);
+    //void joinDataspace(String tenantId, String participantId, String dataspaceProfileId);
 }

@@ -164,9 +164,8 @@ public class TenantService {
           if (cfmDataspaceProfileId == null || cfmDataspaceProfileId.isBlank()) {throw new IllegalStateException(
                                     "Dataspace " + dataspaceId + " does not have property cfmDataspaceProfileId — cannot issue credentials");
                 }
-            var tenant = participant.getTenant();
-            tenantManagerClient.joinDataspace(tenant.getCorrelationId(), participant.getCorrelationId(), cfmDataspaceProfileId);
 
+        dataspaceRepository.findById(dataspaceId).orElseThrow(() -> new ObjectNotFoundException("Dataspace not found with id: " + dataspaceId));
 
         return toParticipantResource(participant);
     }

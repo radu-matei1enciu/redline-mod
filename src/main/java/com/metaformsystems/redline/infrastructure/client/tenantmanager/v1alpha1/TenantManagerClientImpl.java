@@ -185,14 +185,5 @@ public class TenantManagerClientImpl implements TenantManagerClient {
                 .block();
     }
 
-    @Override
-    public void joinDataspace(String tenantId, String participantId, String dataspaceProfileId) {
-        webClient.post()
-                .uri(API_BASE + "/tenants/{tenantId}/participant-profiles/{participantId}/dataspaces/{dataspaceProfileId}/join",
-                        tenantId, participantId, dataspaceProfileId)
-                .retrieve()
-                .toBodilessEntity()
-                .block();
-    }
 }
 
