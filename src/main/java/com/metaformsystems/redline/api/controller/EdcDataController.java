@@ -101,7 +101,8 @@ public class EdcDataController {
                     file.getContentType(),
                     file.getOriginalFilename(),
                     celExpressions != null ? celExpressions : List.of(),
-                    policySet
+                    policySet,
+                    dataspaceId
             );
         } catch (IOException e) {
             return ResponseEntity.internalServerError().build();

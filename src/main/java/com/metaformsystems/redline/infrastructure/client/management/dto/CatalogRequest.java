@@ -29,9 +29,7 @@ public class CatalogRequest {
     private String protocol = "dataspace-protocol-http:2025-1";
     private String counterPartyAddress;
     private String counterPartyId;
-    private List<String> additionalScopes = new ArrayList<>(List.of(
-            "org.eclipse.dspace.dcp.vc.type:CatenaMembershipCredential:read"
-    ));
+    private List<String> additionalScopes = new ArrayList<>();
 
     public String[] getContext() {
         return context;

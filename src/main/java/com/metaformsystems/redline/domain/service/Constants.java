@@ -15,11 +15,13 @@
 
 package com.metaformsystems.redline.domain.service;
 
-import com.metaformsystems.redline.infrastructure.client.management.dto.PolicySet;
-
 public interface Constants {
+    String DCP_SCOPE_TEMPLATE = "org.eclipse.dspace.dcp.vc.type:%s:read";
     String ASSET_PERMISSION = "membership_asset";
-    String MEMBERSHIP_EXPRESSION_ID = "membership_expr";
-    String MEMBERSHIP_EXPRESSION = "ctx.agent.claims.vc.filter(c, c.type.exists(t, t == 'CatenaMembershipCredential')).exists(c, c.credentialSubject.exists(cs, timestamp(cs.membershipStartDate) < now))";
-    PolicySet.Constraint MEMBERSHIP_CONSTRAINT = new PolicySet.Constraint("CatenaMembershipCredential", "eq", "active");
+
+    String MEMBERSHIP_EXPRESSION_ID_TEMPLATE = "%s_expr_id";
+    String MEMBERSHIP_EXPRESSION_TEMPLATE = "ctx.agent.claims.vc.filter(c, c.type.exists(t, t == '%s')).exists(c, c.credentialSubject.exists(cs, timestamp(cs.membershipStartDate) < now))";
+
+    String MEMBERSHIP_CONSTRAINT_OPERATOR = "eq";
+    String MEMBERSHIP_CONSTRAINT_RIGHT_OPERAND = "active";
 }

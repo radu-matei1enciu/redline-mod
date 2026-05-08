@@ -33,4 +33,18 @@ public interface DataspaceRepository extends JpaRepository<Dataspace, Long> {
             )
             """)
     List<Dataspace> findDataspacesByCounterPartyIdentifier(@Param("counterPartyIdentifier") String counterPartyIdentifier);
+
+    @Query("""
+    SELECT d
+    FROM Dataspace d
+    WHERE d.id IN (
+        SELECT di.dataspaceId
+        FROM DataspaceInfo di
+        WHERE di IN (
+            SELECT info FROM Participant p JOIN p.dataspaceInfos info
+            WHERE p.id = :participantId
+        )
+    )
+""")
+    List<Dataspace> findDataspacesByParticipantId(@Param("participantId") Long participantId);
 }

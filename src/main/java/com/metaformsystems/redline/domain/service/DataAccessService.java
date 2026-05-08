@@ -17,7 +17,6 @@ package com.metaformsystems.redline.domain.service;
 
 import com.metaformsystems.redline.api.dto.request.TransferProcessRequest;
 import com.metaformsystems.redline.api.dto.response.FileResource;
-import com.metaformsystems.redline.domain.entity.DataspaceInfo;
 import com.metaformsystems.redline.domain.entity.UploadedFile;
 import com.metaformsystems.redline.domain.exception.ObjectNotFoundException;
 import com.metaformsystems.redline.domain.repository.DataspaceRepository;
@@ -48,12 +47,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -82,18 +76,35 @@ public class DataAccessService {
         this.dataspaceRepository = dataspaceRepository;
         this.managementApiClient = managementApiClient;
         this.sigletApiClient = sigletApiClient;
-        this.catalogCache = new ConcurrentLruCache<>(100, key -> fetchCatalog(key.participantId(), key.did()));
+        this.catalogCache = new ConcurrentLruCache<>(100, key -> fetchCatalog(key.participantId(), key.did(), key.additionalScopes()));
         this.webDidResolver = webDidResolver;
     }
 
     @Transactional
-    public void uploadFileForParticipant(Long participantId, Map<String, Object> publicMetadata, Map<String, Object> privateMetadata, InputStream fileStream, String contentType, String originalFilename, List<CelExpression> celExpressions, PolicySet policySet) {
+    public void uploadFileForParticipant(Long participantId, Map<String, Object> publicMetadata, Map<String, Object> privateMetadata, InputStream fileStream, String contentType, String originalFilename, List<CelExpression> celExpressions, PolicySet policySet, Long dataspaceId) {
 
         var participant = participantRepository.findById(participantId).orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
         var participantContextId = participant.getParticipantContextId();
 
         // Resolve credential type dynamically from the participant's dataspace
-        var credentialType = resolveCredentialType(participant);
+        var credentialType = dataspaceRepository.findDataspacesByParticipantId(participantId)
+                .stream()
+                .filter(d -> Objects.equals(d.getId(), dataspaceId))
+                .map(d -> (String) d.getProperties().get("credentialType"))
+                .filter(StringUtils::hasText)
+                .findFirst()
+                .orElseThrow(() -> new ObjectNotFoundException("Credential type not found"));
+
+        var membershipExpression = MEMBERSHIP_EXPRESSION_TEMPLATE.formatted(credentialType);
+
+        var membershipConstraint = new PolicySet.Constraint(
+                credentialType,
+                MEMBERSHIP_CONSTRAINT_OPERATOR,
+                MEMBERSHIP_CONSTRAINT_RIGHT_OPERAND
+        );
+
+        log.info("Resolved credential type for participant {} and dataspace {}: {}",
+                participantId, dataspaceId, credentialType);
 
         //0. upload file to data plane
         var assetId = UUID.randomUUID().toString();
@@ -106,11 +117,11 @@ public class DataAccessService {
         //1. create CEL expressions
         var expressions = new ArrayList<>(celExpressions);
         expressions.add(CelExpression.Builder.aNewCelExpression()
-                .id(MEMBERSHIP_EXPRESSION_ID)
-                .leftOperand("CatenaMembershipCredential")
+                .id(MEMBERSHIP_EXPRESSION_ID_TEMPLATE.formatted(credentialType.toLowerCase()))
+                .leftOperand(credentialType)
                 .description("Expression for evaluating membership credential")
                 .scopes(Set.of("catalog", "contract.negotiation", "transfer.process"))
-                .expression(MEMBERSHIP_EXPRESSION)
+                .expression(membershipExpression)
                 .build());
         expressions.forEach(celExpression -> {
             try {
@@ -127,12 +138,12 @@ public class DataAccessService {
 
         //3. create policy
         if (policySet != null) {
-            var constraints = new ArrayList<>(List.of(MEMBERSHIP_CONSTRAINT));
+            var constraints = new ArrayList<>(List.of(membershipConstraint));
             constraints.addAll(policySet.getPermission().getFirst().getConstraint());
             policySet.getPermission().getFirst().setConstraint(constraints);
         } else {
             policySet = new PolicySet(List.of(new PolicySet.Permission("use",
-                    new ArrayList<>(List.of(MEMBERSHIP_CONSTRAINT))
+                    new ArrayList<>(List.of(membershipConstraint))
             )));
         }
         var policy = NewPolicyDefinition.Builder.aNewPolicyDefinition()
@@ -164,9 +175,20 @@ public class DataAccessService {
     @Transactional
     public Catalog requestCatalog(Long participantId, String counterPartyIdentifier, String cacheControl) {
 
-        var participant = participantRepository.findById(participantId).orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
+        var participant = participantRepository.findById(participantId)
+                .orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
 
-        var key = new LookupKey(participant.getParticipantContextId(), counterPartyIdentifier);
+        var additionalScopes = dataspaceRepository.findDataspacesByParticipantId(participantId)
+                .stream()
+                .map(d -> (String) d.getProperties().get("credentialType"))
+                .filter(Objects::nonNull)
+                .map(DCP_SCOPE_TEMPLATE::formatted)
+                .toList();
+
+        // credentialTypes is now available alongside participant
+        log.info("Credential types for participant {}: {}", participantId, additionalScopes);
+
+        var key = new LookupKey(participant.getParticipantContextId(), counterPartyIdentifier, additionalScopes.stream().sorted().toList());
         var catalogEntry = catalogCache.get(key);
         //todo: check if expired or must be reloaded
         if (isExpired(catalogEntry, cacheControl)) {
@@ -261,41 +283,12 @@ public class DataAccessService {
         return dataPlaneApiClient.downloadFile(authToken, fileId);
     }
 
-    /**
-     * Resolves the membership credential type for a participant based on their dataspace's
-     * 'credentialType' property. Falls back to CatenaMembershipCredential if not configured.
-     */
-    private String resolveCredentialType(com.metaformsystems.redline.domain.entity.Participant participant) {
-        return participant.getDataspaceInfos().stream()
-                .map(DataspaceInfo::getDataspaceId)
-                .flatMap(id -> dataspaceRepository.findById(id).stream())
-                .map(ds -> ds.getProperties().get("credentialType"))
-                .filter(v -> v instanceof String s && StringUtils.hasText(s))
-                .map(Object::toString)
-                .findFirst()
-                .orElseGet(() -> {
-                    log.warn("No credentialType property found for participant {}, defaulting to CatenaMembershipCredential",
-                            participant.getId());
-                    return "CatenaMembershipCredential";
-                });
-    }
-
-    private CacheableEntry<Catalog> fetchCatalog(String participantId, String did) {
+    private CacheableEntry<Catalog> fetchCatalog(String participantId, String did, List<String> additionalScopes) {
         var counterPartyAddress = webDidResolver.resolveProtocolEndpoints(did);
-
-        // Include the consumer's specific membership credential type as an additional scope
-        // so the provider requests it from IdentityHub during catalog evaluation
-        var participant = participantRepository.findByParticipantContextId(participantId)
-                .orElse(null);
-        var additionalScopes = new ArrayList<String>();
-        if (participant != null) {
-            var credentialType = resolveCredentialType(participant);
-            additionalScopes.add("org.eclipse.dspace.dcp.vc.type:" + credentialType + ":read");
-        }
-
         var request = CatalogRequest.Builder.newInstance()
                 .counterPartyId(did)
                 .counterPartyAddress(counterPartyAddress)
+                .additionalScopes(additionalScopes)
                 .build();
 
         return new CacheableEntry<>(managementApiClient.getCatalog(participantId, request), Instant.now());
@@ -360,6 +353,6 @@ public class DataAccessService {
     private record CacheableEntry<T>(T value, Instant timestamp) {
     }
 
-    private record LookupKey(String participantId, String did) {
+    private record LookupKey(String participantId, String did, List<String> additionalScopes) {
     }
 }
