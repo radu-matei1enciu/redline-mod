@@ -131,21 +131,17 @@ public class TenantService {
 
         return toTenantResource(savedTenant);
     }
-
-    /**
-     * Adds a new dataspace to an existing participant
-     */
     @Transactional
-    public Participant joinAdditionalDataspace(Long tenantId, Long participantId,  Long dataspaceId, List<String> roles) {
+    public Participant joinAdditionalDataspace(Long tenantId, Long participantId, Long dataspaceId, List<String> roles) {
         tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ObjectNotFoundException("Tenant not found with id: " + tenantId));
 
         var participant = participantRepository.findById(participantId)
                 .orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
 
-        var dataspace = dataspaceRepository.findById(dataspaceId).orElseThrow(() -> new ObjectNotFoundException("Dataspace not found with id: " + dataspaceId));
+        var dataspace = dataspaceRepository.findById(dataspaceId)
+                .orElseThrow(() -> new ObjectNotFoundException("Dataspace not found with id: " + dataspaceId));
 
-        // Guard: don't allow duplicate membership.
         boolean alreadyJoined = participant.getDataspaceInfos().stream().anyMatch(ds -> dataspaceId.equals(ds.getDataspaceId()));
         if (alreadyJoined) {
             throw new IllegalStateException(
@@ -157,15 +153,17 @@ public class TenantService {
         info.setRoles(roles != null ? roles : java.util.List.of());
         info.setAgreementTypes(java.util.List.of());
         participant.addDataspaceInfo(info);
-
         participantRepository.save(participant);
 
         var cfmDataspaceProfileId = (String) dataspace.getProperties().get("cfmDataspaceProfileId");
-          if (cfmDataspaceProfileId == null || cfmDataspaceProfileId.isBlank()) {throw new IllegalStateException(
-                                    "Dataspace " + dataspaceId + " does not have property cfmDataspaceProfileId — cannot issue credentials");
-                }
+        if (cfmDataspaceProfileId == null || cfmDataspaceProfileId.isBlank()) {
+            throw new IllegalStateException(
+                    "Dataspace " + dataspaceId + " does not have property cfmDataspaceProfileId — cannot issue credentials");
+        }
 
-        dataspaceRepository.findById(dataspaceId).orElseThrow(() -> new ObjectNotFoundException("Dataspace not found with id: " + dataspaceId));
+        // Call CFM to trigger credential issuance for the new dataspace
+        var tenant = participant.getTenant();
+        tenantManagerClient.joinDataspace(tenant.getCorrelationId(), participant.getCorrelationId(), cfmDataspaceProfileId);
 
         return toParticipantResource(participant);
     }
