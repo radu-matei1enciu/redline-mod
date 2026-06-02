@@ -54,18 +54,18 @@ public class ManagementApiClientImpl implements ManagementApiClient {
     private final WebClient controlPlaneWebClient;
     private final TokenProvider tokenProvider;
     private final ParticipantRepository participantRepository;
-    private final ClientCredentials adminCredentials;
+    private final ClientCredentials provisionerCredentials;
 
     public ManagementApiClientImpl(WebClient controlPlaneWebClient,
                                    TokenProvider tokenProvider,
                                    ParticipantRepository participantRepository,
                                    ObjectMapper objectMapper,
-                                   @Value("${controlplane.admin.client-id:admin}") String adminClientId,
-                                   @Value("${controlplane.admin.client-secret:edc-v-admin-secret}") String adminClientSecret) {
+                                   @Value("${edc.api.clientId:provisioner}") String adminClientId,
+                                   @Value("${edc.api.clientsecret:provisioner-secret}") String adminClientSecret) {
         this.controlPlaneWebClient = controlPlaneWebClient;
         this.tokenProvider = tokenProvider;
         this.participantRepository = participantRepository;
-        this.adminCredentials = new ClientCredentials(adminClientId, adminClientSecret);
+        this.provisionerCredentials = new ClientCredentials(adminClientId, adminClientSecret);
     }
 
     @Override
@@ -215,7 +215,7 @@ public class ManagementApiClientImpl implements ManagementApiClient {
     @Override
     public void createCelExpression(CelExpression celExpression) {
 
-        var token = tokenProvider.getToken(adminCredentials.clientId(), adminCredentials.clientSecret(), "management-api:write management-api:read");
+        var token = tokenProvider.getToken(provisionerCredentials.clientId(), provisionerCredentials.clientSecret(), "management-api:write management-api:read");
         controlPlaneWebClient.post()
                 .uri("/v5beta/celexpressions")
                 .header("Authorization", "Bearer %s".formatted(token))

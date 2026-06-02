@@ -38,19 +38,19 @@ public class IdentityHubClientImpl implements IdentityHubClient {
     private static final String IDENTITY_API_BASE = "/api/identity/v1alpha";
     private final WebClient webClient;
     private final TokenProvider tokenProvider;
-    private final String adminClientId;
-    private final String adminClientSecret;
+    private final String provisionerClientId;
+    private final String provisionerClientSecret;
     private final ParticipantRepository participantRepository;
 
     public IdentityHubClientImpl(WebClient identityHubWebClient,
                                  TokenProvider tokenProvider,
                                  ParticipantRepository participantRepository,
-                                 @Value("${controlplane.admin.client-id:admin}") String adminClientId,
-                                 @Value("${controlplane.admin.client-secret:edc-v-admin-secret}") String adminClientSecret) {
+                                 @Value("${edc.api.clientId:provisioner}") String provisionerClientId,
+                                 @Value("${edc.api.clientsecret:provisioner-secret}") String provisionerClientSecret) {
         this.webClient = identityHubWebClient;
         this.tokenProvider = tokenProvider;
-        this.adminClientId = adminClientId;
-        this.adminClientSecret = adminClientSecret;
+        this.provisionerClientId = provisionerClientId;
+        this.provisionerClientSecret = provisionerClientSecret;
         this.participantRepository = participantRepository;
     }
 
@@ -222,7 +222,7 @@ public class IdentityHubClientImpl implements IdentityHubClient {
     }
 
     private String getToken() {
-        return tokenProvider.getToken(adminClientId, adminClientSecret, "identity-api:read");
+        return tokenProvider.getToken(provisionerClientId, provisionerClientSecret, "identity-api:read");
     }
 
     private String getToken(String participantContextId) {

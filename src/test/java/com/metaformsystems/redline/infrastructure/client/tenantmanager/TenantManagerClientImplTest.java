@@ -14,6 +14,7 @@
 
 package com.metaformsystems.redline.infrastructure.client.tenantmanager;
 
+import com.metaformsystems.redline.application.service.TokenProvider;
 import com.metaformsystems.redline.infrastructure.client.tenantmanager.v1alpha1.TenantManagerClientImpl;
 import com.metaformsystems.redline.infrastructure.client.tenantmanager.v1alpha1.dto.CellCreationRequest;
 import com.metaformsystems.redline.infrastructure.client.tenantmanager.v1alpha1.dto.ModelQuery;
@@ -36,10 +37,14 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @DisplayName("TenantManagerClientImpl Tests")
 class TenantManagerClientImplTest {
 
+    private static final String TEST_TOKEN = "test-token";
+    private final TokenProvider tokenProvider = mock();
     private MockWebServer mockWebServer;
     private TenantManagerClientImpl tenantManagerClient;
 
@@ -52,7 +57,10 @@ class TenantManagerClientImplTest {
                 .baseUrl(mockWebServer.url("/").toString())
                 .build();
 
-        tenantManagerClient = new TenantManagerClientImpl(webClient);
+        when(tokenProvider.getToken("provisioner", "provisioner-secret", "identity-api:read"))
+                .thenReturn(TEST_TOKEN);
+
+        tenantManagerClient = new TenantManagerClientImpl(webClient, tokenProvider, "provisioner", "provisioner-secret");
     }
 
     @AfterEach
