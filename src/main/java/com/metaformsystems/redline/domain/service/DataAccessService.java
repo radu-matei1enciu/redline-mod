@@ -87,15 +87,30 @@ public class DataAccessService {
         var participant = participantRepository.findById(participantId)
                 .orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
 
-        String participantContextId = participant.getParticipantContextId();
+        // Try the requesting participant's own endpoints first (provider calling their own asset)
+        var localMatch = participant.getEndpointResources().stream()
+                .filter(r -> assetId.equals(r.getAssetId()))
+                .findFirst();
 
-        String endpointUrl = participant.getEndpointResources().stream()
-                .filter(resource -> assetId.equals(resource.getAssetId()))
-                .map(EndpointResource::getEndpointUrl)
+        if (localMatch.isPresent()) {
+            return dataPlaneApiClient.getJson(
+                    participant.getParticipantContextId(),
+                    localMatch.get().getEndpointUrl()
+            );
+        }
+
+        // Not found locally — consumer use case: search all participants for the asset owner
+        var ownerAndEndpoint = participantRepository.findAll().stream()
+                .flatMap(p -> p.getEndpointResources().stream()
+                        .filter(r -> assetId.equals(r.getAssetId()))
+                        .map(r -> Map.entry(p, r)))
                 .findFirst()
                 .orElseThrow(() -> new ObjectNotFoundException("Endpoint asset not found with id: " + assetId));
 
-        return dataPlaneApiClient.getJson(participantContextId, endpointUrl);
+        return dataPlaneApiClient.getJson(
+                ownerAndEndpoint.getKey().getParticipantContextId(),
+                ownerAndEndpoint.getValue().getEndpointUrl()
+        );
     }
 
     @Transactional
