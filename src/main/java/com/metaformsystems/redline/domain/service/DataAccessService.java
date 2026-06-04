@@ -16,6 +16,7 @@
 package com.metaformsystems.redline.domain.service;
 
 import com.metaformsystems.redline.api.dto.request.TransferProcessRequest;
+import com.metaformsystems.redline.api.dto.response.EndpointResourceResponse;
 import com.metaformsystems.redline.api.dto.response.FileResource;
 import com.metaformsystems.redline.domain.entity.UploadedFile;
 import com.metaformsystems.redline.domain.exception.ObjectNotFoundException;
@@ -36,6 +37,7 @@ import com.metaformsystems.redline.infrastructure.client.management.dto.PolicySe
 import com.metaformsystems.redline.infrastructure.client.management.dto.TransferProcess;
 import com.metaformsystems.redline.infrastructure.client.management.dto.TransferRequest;
 import com.metaformsystems.redline.infrastructure.client.siglet.SigletApiClient;
+import com.metaformsystems.redline.domain.entity.EndpointResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -81,12 +83,50 @@ public class DataAccessService {
     }
 
     @Transactional
-    public void uploadFileForParticipant(Long participantId, Map<String, Object> publicMetadata, Map<String, Object> privateMetadata, InputStream fileStream, String contentType, String originalFilename, List<CelExpression> celExpressions, PolicySet policySet, Long dataspaceId) {
+    public List<Map<String, Object>> getAssetData(Long participantId, String assetId) {
+        var participant = participantRepository.findById(participantId)
+                .orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
 
-        var participant = participantRepository.findById(participantId).orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
+        String participantContextId = participant.getParticipantContextId();
+
+        String endpointUrl = participant.getEndpointResources().stream()
+                .filter(resource -> assetId.equals(resource.getAssetId()))
+                .map(EndpointResource::getEndpointUrl)
+                .findFirst()
+                .orElseThrow(() -> new ObjectNotFoundException("Endpoint asset not found with id: " + assetId));
+
+        return dataPlaneApiClient.getJson(participantContextId, endpointUrl);
+    }
+
+    @Transactional
+    public List<EndpointResourceResponse> listEndpointsForParticipant(Long participantId) {
+        var participant = participantRepository.findById(participantId)
+                .orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
+
+        return participant.getEndpointResources().stream()
+                .map(endpoint -> new EndpointResourceResponse(
+                        endpoint.getAssetId(),
+                        endpoint.getEndpointUrl(),
+                        endpoint.getName(),
+                        endpoint.getMetadata()
+                ))
+                .toList();
+    }
+
+    @Transactional
+    public void registerEndpointForParticipant(Long participantId,
+                                            String endpointUrl,
+                                            String name,
+                                            Map<String, Object> publicMetadata,
+                                            Map<String, Object> privateMetadata,
+                                            List<CelExpression> celExpressions,
+                                            PolicySet policySet,
+                                            Long dataspaceId) {
+
+        var participant = participantRepository.findById(participantId)
+                .orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
         var participantContextId = participant.getParticipantContextId();
 
-        // Resolve credential type dynamically from the participant's dataspace
         var credentialType = dataspaceRepository.findDataspacesByParticipantId(participantId)
                 .stream()
                 .filter(d -> Objects.equals(d.getId(), dataspaceId))
@@ -96,25 +136,23 @@ public class DataAccessService {
                 .orElseThrow(() -> new ObjectNotFoundException("Credential type not found"));
 
         var membershipExpression = MEMBERSHIP_EXPRESSION_TEMPLATE.formatted(credentialType);
-
         var membershipConstraint = new PolicySet.Constraint(
                 credentialType,
                 MEMBERSHIP_CONSTRAINT_OPERATOR,
                 MEMBERSHIP_CONSTRAINT_RIGHT_OPERAND
         );
 
-        log.info("Resolved credential type for participant {} and dataspace {}: {}",
+        log.info("Registering endpoint for participant {} in dataspace {} — credential type: {}",
                 participantId, dataspaceId, credentialType);
 
-        //0. upload file to data plane
         var assetId = UUID.randomUUID().toString();
         publicMetadata.put("assetId", assetId);
-        var combinedMetadata = Stream.of(publicMetadata, privateMetadata).flatMap(m -> m.entrySet().stream())
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        var response = dataPlaneApiClient.uploadMultipart(participantContextId, combinedMetadata, fileStream);
-        var fileId = response.id();
 
-        //1. create CEL expressions
+        var combinedMetadata = Stream.of(publicMetadata, privateMetadata)
+                .flatMap(m -> m.entrySet().stream())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        // 1. create CEL expressions
         var expressions = new ArrayList<>(celExpressions);
         expressions.add(CelExpression.Builder.aNewCelExpression()
                 .id(MEMBERSHIP_EXPRESSION_ID_TEMPLATE.formatted(credentialType.toLowerCase()))
@@ -127,16 +165,15 @@ public class DataAccessService {
             try {
                 managementApiClient.createCelExpression(celExpression);
             } catch (WebClientResponseException.Conflict e) {
-                //do nothing, CEL expression already exists
+                // already exists, nothing to do
             }
         });
 
-        //2. create asset
-        publicMetadata.put("fileId", fileId);
-        var asset = createAsset(assetId, publicMetadata, privateMetadata, contentType, originalFilename);
+        // 2. create asset with HttpData data address pointing to the endpoint URL
+        var asset = createEndpointAsset(assetId, endpointUrl, name, publicMetadata, privateMetadata);
         managementApiClient.createAsset(participantContextId, asset);
 
-        //3. create policy
+        // 3. create policy
         if (policySet != null) {
             var constraints = new ArrayList<>(List.of(membershipConstraint));
             constraints.addAll(policySet.getPermission().getFirst().getConstraint());
@@ -151,7 +188,7 @@ public class DataAccessService {
                 .policy(policySet).build();
         managementApiClient.createPolicy(participantContextId, policy);
 
-        //4. create contract definition if none exists
+        // 4. create contract definition
         var contractDef = NewContractDefinition.Builder.aNewContractDefinition()
                 .id(UUID.randomUUID().toString())
                 .contractPolicyId(policy.getId())
@@ -160,16 +197,10 @@ public class DataAccessService {
                 .build();
         managementApiClient.createContractDefinition(participantContextId, contractDef);
 
-        //5. track uploaded file in DB
-        participant.getUploadedFiles().add(new UploadedFile(fileId, originalFilename, contentType, combinedMetadata));
-    }
-
-    @Transactional
-    public List<FileResource> listFilesForParticipant(Long participantId) {
-        var participant = participantRepository.findById(participantId).orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
-        return participant.getUploadedFiles().stream()
-                .map(f -> new FileResource(f.getFileId(), f.getOriginalFilename(), f.getContentType(), f.getCreatedAt().toString(), f.getMetadata()))
-                .toList();
+        // 5. track the registered endpoint in the DB
+        participant.getEndpointResources().add(
+                new EndpointResource(assetId, endpointUrl, name, combinedMetadata)
+        );
     }
 
     @Transactional
@@ -277,12 +308,6 @@ public class DataAccessService {
         return tp;
     }
 
-    @Transactional
-    public byte[] downloadData(Long participantId, String fileId, String authToken) {
-        participantRepository.findById(participantId).orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
-        return dataPlaneApiClient.downloadFile(authToken, fileId);
-    }
-
     private CacheableEntry<Catalog> fetchCatalog(String participantId, String did, List<String> additionalScopes) {
         var counterPartyAddress = webDidResolver.resolveProtocolEndpoints(did);
         var request = CatalogRequest.Builder.newInstance()
@@ -329,12 +354,14 @@ public class DataAccessService {
         return negotiation;
     }
 
-    private Asset createAsset(String id, Map<String, Object> publicMetadata, Map<String, Object> privateMetadata, String contentType, String originalFilename) {
+    private Asset createEndpointAsset(String id, String endpointUrl, String name,
+                                    Map<String, Object> publicMetadata,
+                                    Map<String, Object> privateMetadata) {
 
         var properties = new HashMap<String, Object>(Map.of(
-                "description", "A file uploaded by Redline on " + Instant.now().toString(),
-                "contentType", contentType,
-                "originalFilename", originalFilename));
+                "description", "An endpoint registered by Redline on " + Instant.now().toString(),
+                "name", name,
+                "endpointUrl", endpointUrl));
         properties.putAll(publicMetadata);
 
         privateMetadata.put("permission", ASSET_PERMISSION);
@@ -342,10 +369,11 @@ public class DataAccessService {
         return Asset.Builder.aNewAsset()
                 .id(id)
                 .dataAddress(Map.of(
-                        "type", "HttpCertData",
-                        "@type", "DataAddress"
+                        "type", "HttpData",
+                        "@type", "DataAddress",
+                        "baseUrl", endpointUrl
                 ))
-                .privateProperties(privateMetadata) //this is targeted by the CEL expression, so it must be a private property
+                .privateProperties(privateMetadata)
                 .properties(Map.of("properties", properties))
                 .build();
     }

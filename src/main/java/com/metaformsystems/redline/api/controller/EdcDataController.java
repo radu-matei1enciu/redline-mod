@@ -19,9 +19,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metaformsystems.redline.api.dto.request.ContractRequest;
 import com.metaformsystems.redline.api.dto.request.CounterPartyIdWrapper;
+import com.metaformsystems.redline.api.dto.request.RegisterEndpointRequest;
 import com.metaformsystems.redline.api.dto.request.TransferProcessRequest;
 import com.metaformsystems.redline.api.dto.response.Contract;
 import com.metaformsystems.redline.api.dto.response.ContractNegotiation;
+import com.metaformsystems.redline.api.dto.response.EndpointResourceResponse;
 import com.metaformsystems.redline.api.dto.response.FileResource;
 import com.metaformsystems.redline.domain.service.DataAccessService;
 import com.metaformsystems.redline.infrastructure.client.management.dto.Catalog;
@@ -70,62 +72,57 @@ public class EdcDataController {
         this.objectMapper = objectMapper;
     }
 
-    @PostMapping(path = "service-providers/{providerId}/dataspaces/{dataspaceId}/tenants/{tenantId}/participants/{participantId}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-//    @PreAuthorize("hasRole('USER')")
-    @Operation(summary = "Upload a file", description = "Uploads a file for a specific participant with associated metadata")
+    @PostMapping(
+            path = "service-providers/{providerId}/dataspaces/{dataspaceId}/tenants/{tenantId}/participants/{participantId}/endpoints",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+// @PreAuthorize("hasRole('USER')")
+    @Operation(summary = "Register an endpoint", description = "Registers an endpoint for a specific participant with associated metadata")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "File successfully uploaded"),
-            @ApiResponse(responseCode = "400", description = "Invalid file or metadata"),
+            @ApiResponse(responseCode = "200", description = "Endpoint successfully registered"),
+            @ApiResponse(responseCode = "400", description = "Invalid endpoint or metadata"),
             @ApiResponse(responseCode = "404", description = "Service provider, tenant, or participant not found"),
-            @ApiResponse(responseCode = "500", description = "Internal server error during file upload")
+            @ApiResponse(responseCode = "500", description = "Internal server error during endpoint registration")
     })
     @Parameter(name = "participantId", description = "Database ID of the participant", required = true)
     @Parameter(name = "dataspaceId", description = "Database ID of the data space", required = true)
     @Parameter(name = "tenantId", description = "Database ID of the tenant", required = true)
     @Parameter(name = "providerId", description = "Database ID of the service provider", required = true)
-    public ResponseEntity<Void> uploadFile(@PathVariable Long participantId,
-                                           @PathVariable Long tenantId,
-                                           @PathVariable Long providerId,
-                                           @PathVariable Long dataspaceId,
-                                           @RequestPart("publicMetadata") Map<String, Object> publicMetadata,
-                                           @RequestPart("privateMetadata") Map<String, Object> privateMetadata,
-                                           @RequestPart(value = "celExpressions", required = false) List<CelExpression> celExpressions,
-                                           @RequestPart(value = "policySet", required = false) PolicySet policySet,
-                                           @RequestPart("file") MultipartFile file) {
-        try {
-            dataAccessService.uploadFileForParticipant(
-                    participantId,
-                    publicMetadata,
-                    privateMetadata,
-                    file.getInputStream(),
-                    file.getContentType(),
-                    file.getOriginalFilename(),
-                    celExpressions != null ? celExpressions : List.of(),
-                    policySet,
-                    dataspaceId
-            );
-        } catch (IOException e) {
-            return ResponseEntity.internalServerError().build();
-        }
+    public ResponseEntity<Void> registerEndpoint(@PathVariable Long participantId,
+                                                 @PathVariable Long tenantId,
+                                                 @PathVariable Long providerId,
+                                                 @PathVariable Long dataspaceId,
+                                                 @RequestBody RegisterEndpointRequest request) {
 
-        return ResponseEntity.ok(null);
+        dataAccessService.registerEndpointForParticipant(
+                participantId,
+                request.endpointUrl(),
+                request.name(),
+                request.publicMetadata(),
+                request.privateMetadata(),
+                request.celExpressions() != null ? request.celExpressions() : List.of(),
+                request.policySet(),
+                dataspaceId
+        );
+
+        return ResponseEntity.ok().build();
     }
 
-    @GetMapping("service-providers/{providerId}/tenants/{tenantId}/participants/{participantId}/files")
-//    @PreAuthorize("hasRole('USER')")
-    @Operation(summary = "List files", description = "Retrieves a list of all files associated with a specific participant")
+    @GetMapping("service-providers/{providerId}/tenants/{tenantId}/participants/{participantId}/endpoints")
+// @PreAuthorize("hasRole('USER')")
+    @Operation(summary = "List endpoints", description = "Retrieves a list of all registered endpoints associated with a specific participant")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved file list"),
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved endpoint list"),
             @ApiResponse(responseCode = "404", description = "Service provider, tenant, or participant not found")
     })
     @Parameter(name = "participantId", description = "Database ID of the participant", required = true)
     @Parameter(name = "tenantId", description = "Database ID of the tenant", required = true)
     @Parameter(name = "providerId", description = "Database ID of the service provider", required = true)
-    public ResponseEntity<List<FileResource>> listFiles(@PathVariable Long participantId,
-                                                        @PathVariable Long tenantId,
-                                                        @PathVariable Long providerId) {
-        var files = dataAccessService.listFilesForParticipant(participantId);
-        return ResponseEntity.ok(files);
+    public ResponseEntity<List<EndpointResourceResponse>> listEndpoints(@PathVariable Long participantId,
+                                                                        @PathVariable Long tenantId,
+                                                                        @PathVariable Long providerId) {
+        var endpoints = dataAccessService.listEndpointsForParticipant(participantId);
+        return ResponseEntity.ok(endpoints);
     }
 
     @PostMapping("service-providers/{providerId}/tenants/{tenantId}/participants/{participantId}/catalog")
@@ -311,21 +308,23 @@ public class EdcDataController {
         return ResponseEntity.ok(transferProcess);
     }
 
-    @Operation(summary = "Download file")
+    @Operation(summary = "Get endpoint data")
     @ApiResponse(
             responseCode = "200",
             content = @Content(
-                    mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE,
-                    schema = @Schema(type = "string", format = "binary")
+                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(type = "array")
             )
     )
-    @GetMapping(value = "service-providers/{providerId}/tenants/{tenantId}/participants/{participantId}/files/{fileId}", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    public ResponseEntity<byte[]> downloadData(@PathVariable Long providerId,
-                                               @PathVariable Long tenantId,
-                                               @PathVariable Long participantId,
-                                               @PathVariable String fileId,
-                                               @RequestHeader(name = "Authorization") String authorizationHeader) {
-        var data = dataAccessService.downloadData(participantId, fileId, authorizationHeader);
+    @GetMapping(
+            value = "service-providers/{providerId}/tenants/{tenantId}/participants/{participantId}/endpoints/{assetId}/data",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<List<Map<String, Object>>> getAssetData(@PathVariable Long providerId,
+                                                                  @PathVariable Long tenantId,
+                                                                  @PathVariable Long participantId,
+                                                                  @PathVariable String assetId) {
+        var data = dataAccessService.getAssetData(participantId, assetId);
         return ResponseEntity.ok(data);
     }
 

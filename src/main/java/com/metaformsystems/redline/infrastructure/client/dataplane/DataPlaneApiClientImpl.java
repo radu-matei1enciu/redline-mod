@@ -17,103 +17,38 @@ package com.metaformsystems.redline.infrastructure.client.dataplane;
 import com.metaformsystems.redline.application.service.TokenProvider;
 import com.metaformsystems.redline.domain.exception.ObjectNotFoundException;
 import com.metaformsystems.redline.domain.repository.ParticipantRepository;
-import com.metaformsystems.redline.infrastructure.client.dataplane.dto.UploadResponse;
-import com.metaformsystems.redline.infrastructure.client.management.dto.QuerySpec;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Flux;
 
-import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
 @Component
 public class DataPlaneApiClientImpl implements DataPlaneApiClient {
-    private final WebClient dataPlanePublicClient;
-    private final WebClient dataPlaneInternalClient;
+
+    private final WebClient.Builder webClientBuilder;
     private final ParticipantRepository participantRepository;
     private final TokenProvider tokenProvider;
 
-    public DataPlaneApiClientImpl(WebClient dataPlanePublicClient, WebClient dataPlaneInternalClient, ParticipantRepository participantRepository, TokenProvider tokenProvider) {
-        this.dataPlanePublicClient = dataPlanePublicClient.mutate()
-                .exchangeStrategies(ExchangeStrategies.builder()
-                        .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(50 * 1024 * 1024))
-                        .build())
-                .build();
-        this.dataPlaneInternalClient = dataPlaneInternalClient;
+    public DataPlaneApiClientImpl(
+            WebClient.Builder webClientBuilder,
+            ParticipantRepository participantRepository,
+            TokenProvider tokenProvider
+    ) {
+        this.webClientBuilder = webClientBuilder;
         this.participantRepository = participantRepository;
         this.tokenProvider = tokenProvider;
     }
 
     @Override
-    public UploadResponse uploadMultipart(String participantContextId, Map<String, Object> metadata, InputStream data) {
-        var bodyBuilder = new MultipartBodyBuilder();
-
-        // Add metadata fields
-        if (metadata != null) {
-            bodyBuilder.part("metadata", metadata);
-        }
-
-        // Add file data
-        bodyBuilder
-                .part("file", new InputStreamResource(data))
-                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE);
-
-        return dataPlaneInternalClient.post()
-                .uri("/certs")
-                .header("Authorization", "Bearer " + getToken(participantContextId))
-                .contentType(MediaType.MULTIPART_FORM_DATA)
-                .bodyValue(bodyBuilder.build())
+    public List<Map<String, Object>> getJson(String participantContextId, String endpointUrl) {
+        return webClientBuilder.build()
+                .get()
+                .uri(endpointUrl)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + getToken(participantContextId))
                 .retrieve()
-                .bodyToMono(UploadResponse.class)
-                .block();
-    }
-
-    @Override
-    public List<UploadResponse> getAllUploads() {
-        return dataPlaneInternalClient.post()
-                .uri("/certs/request")
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<List<UploadResponse>>() {
-                })
-                .block();
-    }
-
-    @Override
-    public List<UploadResponse> listPublicFiles(String participantContextId, QuerySpec querySpec) {
-        return dataPlanePublicClient.post()
-                .uri("/certs/request")
-                .bodyValue(querySpec)
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<List<UploadResponse>>() {
-                })
-                .block();
-    }
-
-    @Override
-    public byte[] downloadFile(String authToken, String fileId) {
-
-        Flux<DataBuffer> dataBufferFlux = dataPlanePublicClient.get()
-                .uri("/certs/" + fileId)
-                .header("Authorization", "Bearer " + authToken)
-                .retrieve()
-                .bodyToFlux(DataBuffer.class);
-
-        return DataBufferUtils.join(dataBufferFlux)
-                .map(dataBuffer -> {
-                    byte[] bytes = new byte[dataBuffer.readableByteCount()];
-                    dataBuffer.read(bytes);
-                    DataBufferUtils.release(dataBuffer);
-                    return bytes;
-                })
+                .bodyToMono(new org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>>() {})
                 .block();
     }
 

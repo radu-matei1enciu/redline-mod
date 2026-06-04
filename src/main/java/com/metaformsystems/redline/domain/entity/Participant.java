@@ -58,6 +58,10 @@ public class Participant extends VersionedEntity {
     @JoinColumn(name = "uploaded_files")
     private List<UploadedFile> uploadedFiles = new ArrayList<>();
 
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "participant_id")
+    private List<EndpointResource> endpointResources = new ArrayList<>();
+
     public String getIdentifier() {
         return identifier;
     }
@@ -127,6 +131,14 @@ public class Participant extends VersionedEntity {
 
     public void setUploadedFiles(List<UploadedFile> uploadedFiles) {
         this.uploadedFiles = uploadedFiles;
+    }
+
+    public List<EndpointResource> getEndpointResources() {
+    return endpointResources;
+    }
+
+    public void setEndpointResources(List<EndpointResource> endpointResources) {
+        this.endpointResources = endpointResources;
     }
 
     public void addDataspaceInfo(DataspaceInfo info) {
