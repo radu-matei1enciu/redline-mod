@@ -323,8 +323,9 @@ public class EdcDataController {
     public ResponseEntity<List<Map<String, Object>>> getAssetData(@PathVariable Long providerId,
                                                                   @PathVariable Long tenantId,
                                                                   @PathVariable Long participantId,
-                                                                  @PathVariable String assetId) {
-        var data = dataAccessService.getAssetData(participantId, assetId);
+                                                                  @PathVariable String assetId,
+                                                                  @RequestHeader(name = "Authorization") String authorizationHeader) {
+        var data = dataAccessService.getAssetData(participantId, assetId, authorizationHeader);
         return ResponseEntity.ok(data);
     }
 

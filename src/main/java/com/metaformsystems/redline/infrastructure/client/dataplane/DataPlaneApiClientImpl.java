@@ -38,7 +38,7 @@ public class DataPlaneApiClientImpl implements DataPlaneApiClient {
         return webClientBuilder.build()
                 .get()
                 .uri(endpointUrl)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + authToken)
+                .header(HttpHeaders.AUTHORIZATION,authToken)
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
                 .block();

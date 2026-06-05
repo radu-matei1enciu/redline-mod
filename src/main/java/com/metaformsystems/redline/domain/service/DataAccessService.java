@@ -83,7 +83,7 @@ public class DataAccessService {
     }
 
     @Transactional
-    public List<Map<String, Object>> getAssetData(Long participantId, String assetId) {
+    public List<Map<String, Object>> getAssetData(Long participantId, String assetId, String authorizationHeader) {
         var participant = participantRepository.findById(participantId)
                 .orElseThrow(() -> new ObjectNotFoundException("Participant not found with id: " + participantId));
 
@@ -93,10 +93,7 @@ public class DataAccessService {
                 .findFirst();
 
         if (localMatch.isPresent()) {
-            var edr = sigletApiClient.getDataAddress(participant.getParticipantContextId(), assetId);
-            var token = (String) ((Map<?, ?>) edr.get("properties"))
-                    .get("https://w3id.org/edc/v0.0.1/ns/authorization");
-            return dataPlaneApiClient.getJson(token, localMatch.get().getEndpointUrl());
+            return dataPlaneApiClient.getJson(authorizationHeader, localMatch.get().getEndpointUrl());
         }
 
         // Not found locally — consumer use case: search all participants for the asset owner
@@ -107,11 +104,7 @@ public class DataAccessService {
                 .findFirst()
                 .orElseThrow(() -> new ObjectNotFoundException("Endpoint asset not found with id: " + assetId));
 
-        var owner = ownerAndEndpoint.getKey();
-        var edr = sigletApiClient.getDataAddress(owner.getParticipantContextId(), assetId);
-        var token = (String) ((Map<?, ?>) edr.get("properties"))
-                .get("https://w3id.org/edc/v0.0.1/ns/authorization");
-        return dataPlaneApiClient.getJson(token, ownerAndEndpoint.getValue().getEndpointUrl());
+        return dataPlaneApiClient.getJson(authorizationHeader, ownerAndEndpoint.getValue().getEndpointUrl());
     }
 
     @Transactional
