@@ -18,5 +18,5 @@ import java.util.List;
 import java.util.Map;
 
 public interface DataPlaneApiClient {
-    List<Map<String, Object>> getJson(String participantContextId, String endpointUrl);
+    List<Map<String, Object>> getJson(String authToken, String endpointUrl);
 }

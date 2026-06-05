@@ -93,10 +93,10 @@ public class DataAccessService {
                 .findFirst();
 
         if (localMatch.isPresent()) {
-            return dataPlaneApiClient.getJson(
-                    participant.getParticipantContextId(),
-                    localMatch.get().getEndpointUrl()
-            );
+            var edr = sigletApiClient.getDataAddress(participant.getParticipantContextId(), assetId);
+            var token = (String) ((Map<?, ?>) edr.get("properties"))
+                    .get("https://w3id.org/edc/v0.0.1/ns/authorization");
+            return dataPlaneApiClient.getJson(token, localMatch.get().getEndpointUrl());
         }
 
         // Not found locally — consumer use case: search all participants for the asset owner
@@ -107,10 +107,11 @@ public class DataAccessService {
                 .findFirst()
                 .orElseThrow(() -> new ObjectNotFoundException("Endpoint asset not found with id: " + assetId));
 
-        return dataPlaneApiClient.getJson(
-                ownerAndEndpoint.getKey().getParticipantContextId(),
-                ownerAndEndpoint.getValue().getEndpointUrl()
-        );
+        var owner = ownerAndEndpoint.getKey();
+        var edr = sigletApiClient.getDataAddress(owner.getParticipantContextId(), assetId);
+        var token = (String) ((Map<?, ?>) edr.get("properties"))
+                .get("https://w3id.org/edc/v0.0.1/ns/authorization");
+        return dataPlaneApiClient.getJson(token, ownerAndEndpoint.getValue().getEndpointUrl());
     }
 
     @Transactional

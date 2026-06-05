@@ -14,9 +14,7 @@
 
 package com.metaformsystems.redline.infrastructure.client.dataplane;
 
-import com.metaformsystems.redline.application.service.TokenProvider;
-import com.metaformsystems.redline.domain.exception.ObjectNotFoundException;
-import com.metaformsystems.redline.domain.repository.ParticipantRepository;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -28,34 +26,21 @@ import java.util.Map;
 public class DataPlaneApiClientImpl implements DataPlaneApiClient {
 
     private final WebClient.Builder webClientBuilder;
-    private final ParticipantRepository participantRepository;
-    private final TokenProvider tokenProvider;
 
     public DataPlaneApiClientImpl(
-            WebClient.Builder webClientBuilder,
-            ParticipantRepository participantRepository,
-            TokenProvider tokenProvider
+            WebClient.Builder webClientBuilder
     ) {
         this.webClientBuilder = webClientBuilder;
-        this.participantRepository = participantRepository;
-        this.tokenProvider = tokenProvider;
     }
 
     @Override
-    public List<Map<String, Object>> getJson(String participantContextId, String endpointUrl) {
+    public List<Map<String, Object>> getJson(String authToken, String endpointUrl) {
         return webClientBuilder.build()
                 .get()
                 .uri(endpointUrl)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + getToken(participantContextId))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + authToken)
                 .retrieve()
-                .bodyToMono(new org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>>() {})
+                .bodyToMono(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
                 .block();
-    }
-
-    private String getToken(String participantContextId) {
-        var participantProfile = participantRepository.findByParticipantContextId(participantContextId)
-                .orElseThrow(() -> new ObjectNotFoundException("Participant not found with context id: " + participantContextId));
-
-        return tokenProvider.getToken(participantProfile.getClientCredentials().clientId(), participantProfile.getClientCredentials().clientSecret(), "management-api:write management-api:read");
     }
 }
