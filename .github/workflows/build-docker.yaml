@@ -38,11 +38,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set lowercase repository name
+      - name: Set image metadata
         id: repo
         run: |
           repo_lowercase=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
           echo "repo_lowercase=${repo_lowercase}" >> "$GITHUB_OUTPUT"
+          branch_tag=$(echo "${{ github.ref_name }}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+          echo "branch_tag=${branch_tag}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -51,7 +53,7 @@ jobs:
           file: Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ steps.repo.outputs.repo_lowercase }}:latest
+            ghcr.io/${{ steps.repo.outputs.repo_lowercase }}:${{ steps.repo.outputs.branch_tag }}
             ghcr.io/${{ steps.repo.outputs.repo_lowercase }}:${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
